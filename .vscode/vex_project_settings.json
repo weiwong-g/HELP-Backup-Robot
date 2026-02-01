@@ -1,0 +1,18 @@
+{
+	"project": {
+		"name": "Dec13_Really_RealSmartDrive",
+		"slot": 8,
+		"description": "",
+		"platform": "V5",
+		"creationDate": "Fri, 30 Jan 2026 07:21:05 GMT",
+		"language": "python",
+		"python": {
+			"main": "/src/main.py"
+		},
+		"sdkVersion": "V5_1_0_1_25"
+	},
+	"extension": {
+		"version": "0.8.2026011200",
+		"json": 1
+	}
+}
