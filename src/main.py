@@ -1,6 +1,6 @@
 #region VEXcode Generated Robot Configuration
 from vex import *
-import urandom
+import urandom # type: ignore
 import math
 
 # Brain should be defined by default
@@ -47,6 +47,10 @@ class RealSmartDrive:
     SLOW_TURN_ANGLE_DEG = 10
     SMOOTH_SPEED_DISTANCE_MM = 100
     MAX_VOLTAGE = 12
+    # The minimum voltage to move the robot. This value could be different for each robot
+    # based on the robot weight and friction.
+    # Too low, the robot will not move and get stuck in the PID loop forerver.
+    # Too high, the robot will jerk when close to target.
     MIN_VOLTAGE = 2.5
 
     def __init__(self, left_motor, right_motor, inertial, wheel_travel, track_width, wheel_base, external_gear_ratio, inertial_rotation_ratio, p_const, d_const):
@@ -75,54 +79,13 @@ class RealSmartDrive:
             brain.screen.print(message)
             brain.screen.next_row()
 
-    # def _bound_abs_voltages(self, pid_volt):
-    #     """Voltage should be betwen 2-12 volts absolute value."""
-    #     abs_volt = math.fabs(pid_volt)
-    #     if abs_volt > 5:
-    #         return 5
-    #     if abs_volt < 2:
-    #         return 2
-    #     return abs_volt
-
-    def turn_for(self, direction, turn_value, turn_unit=DEGREES, speed_pct=100, speed_unit=PERCENT, wait=True):
+    def turn_for(self, direction, turn_value, turn_unit=DEGREES, wait=True):
         """Turn for a speified angle."""
         if direction not in [LEFT, RIGHT]:
             raise ValueError("direction can only be either LEFT or RIGHT")
-        if speed_pct <=0 or speed_pct > 100:
-            raise ValueError("speed_pct must be between > 0 but <= 100")
-        if speed_unit != PERCENT:
-            raise ValueError("speed_unit must be PERCENT")
         if wait != True:
             raise ValueError("Wait can only be True. No-wait is not yet implemented")
         
-        # turn_value = turn_value * self.inertial_rotation_ratio
-        # left_motor.set_stopping(COAST)
-        # right_motor.set_stopping(COAST)
-        # target_rotation = - turn_value if direction == LEFT else turn_value
-        # self.current_rotation = self.current_rotation + target_rotation
-        # target_gap = target_rotation
-        # while(math.fabs(target_gap) > RealSmartDrive.TURN_ANGLE_TOLERANCE):
-        #     turn_speed = RealSmartDrive.MIN_TURN_SPEED_PCT +  max(speed_pct - RealSmartDrive.MIN_TURN_SPEED_PCT, 0) * math.fabs(target_gap / target_rotation) / 2
-        #     cycle_motor_speed = RealSmartDrive.MIN_TURN_SPEED_PCT if math.fabs(target_gap) < RealSmartDrive.SLOW_TURN_ANGLE_DEG else turn_speed
-        #     left_motor.spin(FORWARD if target_gap > 0 else REVERSE, cycle_motor_speed, PERCENT)
-        #     right_motor.spin(FORWARD if target_gap <= 0 else REVERSE, cycle_motor_speed, PERCENT)
-        #     time.sleep(RealSmartDrive.TIME_STEP_SEC)
-        #     target_gap = self.current_rotation - self.inertial.rotation(DEGREES)
-        #     # self._sampleScreenPrint("R:" + str(self.inertial.rotation(DEGREES)) + " G:" + str(target_gap) + " S:" + str(cycle_motor_speed))
-        # left_motor.stop(BRAKE)
-        # right_motor.stop(BRAKE)
-        # # rotation_error = math.fabs(self.inertial.rotation(DEGREES)) - math.fabs(turn_value)
-        # # brain.screen.print("TER:" + str(rotation_error))
-        # # brain.screen.next_row()
-
-        # # Pseudo-code for Center Goal Alignment
-        # while not aligned:
-        #     objects = vision.take_snapshot(YELLOW_TARGET)
-        #     if objects:
-        #         # Aim for the largest yellow blob (the nearest goal post)
-        #         error = 160 - objects[0].centerX 
-        #         drivetrain.turn(velocity = error * kp)
-
         left_motor.reset_position()
         right_motor.reset_position()
         rotation_error = - turn_value if direction == LEFT else turn_value
@@ -131,7 +94,6 @@ class RealSmartDrive:
         TURN_KP = 0.25
         TURN_KD = 2.5
         DRIFT_KP = 0.05
-        # DRIFT_KP = 0
 
         # Variables for Derivative (D) term
         prev_error = 0
@@ -139,7 +101,6 @@ class RealSmartDrive:
         
         brain.screen.print("Start turning to " + str(self.target_rotation) + " deg")
         brain.screen.next_row()
-
 
         while True:
             error = self.target_rotation - inertial.rotation(DEGREES)
@@ -164,46 +125,16 @@ class RealSmartDrive:
             left_volts = turn_power - drift_correction
             right_volts = -turn_power - drift_correction
 
-            # It's okay to saturate here as we want to turn at full speed when
-            # the error is large. The PID math will reduce the power as we get
-            # closer. We want 2 volts minimum to avoid turning stopping completely.
-            #left_volts = self._bound_abs_voltages(left_volts) if left_volts >=0 else -self._bound_abs_voltages(left_volts)
-            #right_volts = self._bound_abs_voltages(right_volts) if right_volts >=0 else -self._bound_abs_voltages(right_volts)
+            # Adjust voltages to be within min and max voltages, using absolute values
+            # to avoid repeating the code, cuz I am lazy.
             abs_left_volts = self.MIN_VOLTAGE + math.fabs(left_volts) / self.MAX_VOLTAGE * (self.MAX_VOLTAGE - self.MIN_VOLTAGE)
             abs_left_volts = abs_left_volts if abs_left_volts <= self.MAX_VOLTAGE else self.MAX_VOLTAGE
             abs_right_volts = self.MIN_VOLTAGE + math.fabs(right_volts) / self.MAX_VOLTAGE * (self.MAX_VOLTAGE - self.MIN_VOLTAGE)
             abs_right_volts = abs_right_volts if abs_right_volts <= self.MAX_VOLTAGE else self.MAX_VOLTAGE
 
+            # apply the sign back to the adjusted absolute voltages
             left_volts = math.copysign(abs_left_volts, left_volts)
             right_volts = math.copysign(abs_right_volts, right_volts)
-
-            # if left_volts < -self.MAX_VOLTAGE:
-            #     left_volts = -self.MAX_VOLTAGE
-            # if right_volts < -self.MAX_VOLTAGE:
-            #     right_volts = -self.MAX_VOLTAGE
-            # if left_volts > self.MAX_VOLTAGE:
-            #     left_volts = self.MAX_VOLTAGE
-            # if right_volts > self.MAX_VOLTAGE:
-            #     right_volts = self.MAX_VOLTAGE
-
-            # if abs(left_volts) < self.MIN_VOLTAGE:
-            #     volt_adj = 0
-            #     abs_volt = abs(left_volts)
-            #     while(abs_volt < self.MIN_VOLTAGE):
-            #         volt_adj += 0.1
-            #         abs_volt += 0.1
-            #     left_volts += volt_adj if left_volts >0 else -volt_adj
-            #     right_volts += -volt_adj if left_volts >0 else volt_adj
-
-            # if abs(right_volts) < self.MIN_VOLTAGE:
-            #     volt_adj = 0
-            #     abs_volt = abs(right_volts)
-            #     while(abs_volt < self.MIN_VOLTAGE):
-            #         volt_adj += 0.1
-            #         abs_volt += 0.1
-            #     right_volts += volt_adj if right_volts >0 else volt_adj
-            #     left_volts += -volt_adj if right_volts >0 else volt_adj
-
 
             left_motor.spin(FORWARD, left_volts, VOLT) # type: ignore
             right_motor.spin(FORWARD, right_volts, VOLT) # type: ignore
@@ -265,8 +196,8 @@ class RealSmartDrive:
                 smooth_speed_factor = 1 if (distance - traveled_dis) > smooth_distance else (distance - traveled_dis) / smooth_distance
             smooth_speed_factor = RealSmartDrive.MIN_DRIVE_SPEED_PCT/100 + (100 - RealSmartDrive.MIN_DRIVE_SPEED_PCT)/100 * smooth_speed_factor
 
-            left_motor.spin(direction, left_speed_volt * smooth_speed_factor, VOLT)
-            right_motor.spin(direction, right_speed_volt * smooth_speed_factor, VOLT)
+            left_motor.spin(direction, left_speed_volt * smooth_speed_factor, VOLT) # type: ignore
+            right_motor.spin(direction, right_speed_volt * smooth_speed_factor, VOLT) # type: ignore
             time.sleep(RealSmartDrive.TIME_STEP_SEC)
             traveled_dis = math.fabs(self.wheel_travel * self.external_gear_ratio * (left_motor.position(TURNS) + right_motor.position(TURNS)) / 2)
 
@@ -446,8 +377,8 @@ def autonomous():
     #     pass
     def right_basic():
         pistonup()
-        smart_drive.drive_for(FORWARD, 850, MM, 100, PERCENT, wait=True)
-        smart_drive.turn_for(RIGHT, 90, DEGREES, 90, PERCENT, wait=True)
+        smart_drive.drive_for(FORWARD, 850, MM, wait=True)
+        smart_drive.turn_for(RIGHT, 90, DEGREES, wait=True)
         pistondown()
         IntakeMotor.spin_for(FORWARD, 100, TURNS, wait =False)
         smart_drive.drive_for(FORWARD, 300, MM, 100, PERCENT, wait=True)
@@ -527,15 +458,26 @@ def user_control():
 # comp = Competition(user_control, autonomous)
 pre_autonomous()
 
-
 def spin_robot_no_pid():
+    """Spin the robot in place without PID control.
+    
+    This is a good test to see how much the robot drifts when turning without any correction.
+    If left and right motors are perfectly matched, the robot should turn in place without any drift.
+    We certainly want to tune to the hardware to minimize the drift without the help of PID.
+
+    Factors to build a Zero-Radius-Turn robot:
+    1. Make sure left and right motors are matched.
+    2. Make sure the friction on both sides are similar.
+    3. Make sure the weight distribution is even on both sides.
+    4. Make sure the wheels are aligned properly.
+    """
     left_motor.reset_position()
     right_motor.reset_position()
 
-    TURN_VOLTAGE = 5
+    TURN_VOLTAGE = 12
 
     start_time = time.time()
-    run_time = 10 # seconds
+    run_time = 5 # seconds
 
     while True:
         if time.time() - start_time > run_time:
@@ -551,13 +493,20 @@ def spin_robot_no_pid():
     brain.screen.next_row()
 
 def spin_robot_pid():
+    """Spin the robot in place with a simple DRIFT Porportional control.
+    
+    In theory this should help minimize drift. But in the real world, the wheels
+    could slip and render the Porportional control ineffective. i.e. At the end
+    both wheels travelled the same distance (but oposite direction), but the rotational
+    center of the robot would still drift.
+    """
+    # try to tune this.
     DRIFT_KP = 0.5
-    left_motor.reset_position()
-    right_motor.reset_position()
-
     MAX_VOLTAGE = 5
     TURN_VOLTAGE = 3
     MIN_VOLTAGE = 2.5
+    left_motor.reset_position()
+    right_motor.reset_position()
 
     start_time = time.time()
     run_time = 5 # seconds
@@ -593,29 +542,28 @@ def spin_robot_pid():
     brain.screen.print("L Rotation:" + str(left_motor.position(DEGREES)) + " R Rotation:" + str(right_motor.position(DEGREES)))
     brain.screen.next_row()
 
+def test_min_voltage_to_spin_robot():
+    # tested and found that 2.5V is the minium to move the robot
+    left_motor.spin(FORWARD, 2.5, VOLT) # type: ignore
+    right_motor.spin(FORWARD, -2.5, VOLT) # type: ignore
+    wait(10, SECONDS)
+    left_motor.stop()
+    right_motor.stop()
 
-def play():
-    #smart_drive.drive_for(FORWARD, 800, MM, 100, PERCENT, wait=True)
 
-    smart_drive.turn_for(RIGHT, 90, DEGREES, 100, PERCENT, wait=True)
-    smart_drive.turn_for(RIGHT, 90, DEGREES, 100, PERCENT, wait=True)
-    smart_drive.turn_for(RIGHT, 90, DEGREES, 100, PERCENT, wait=True)
-    smart_drive.turn_for(RIGHT, 90, DEGREES, 100, PERCENT, wait=True)
+def demo():
+    smart_drive.turn_for(RIGHT, 90, DEGREES, wait=True)
+    smart_drive.turn_for(RIGHT, 90, DEGREES, wait=True)
+    smart_drive.turn_for(RIGHT, 90, DEGREES, wait=True)
+    smart_drive.turn_for(RIGHT, 90, DEGREES, wait=True)
 
     wait(2, SECONDS)
 
-    smart_drive.turn_for(LEFT, 90, DEGREES, 100, PERCENT, wait=True)
-    smart_drive.turn_for(LEFT, 90, DEGREES, 100, PERCENT, wait=True)
-    smart_drive.turn_for(LEFT, 90, DEGREES, 100, PERCENT, wait=True)
-    smart_drive.turn_for(LEFT, 90, DEGREES, 100, PERCENT, wait=True)
-
-    # tested and found that 2.5V is the minium to move the robot
-    # left_motor.spin(FORWARD, 40, RPM)
-    # right_motor.spin(FORWARD, -40, RPM)
-    # wait(10, SECONDS)
-    # left_motor.stop()
-    # right_motor.stop()
-    
-play()
+    smart_drive.turn_for(LEFT, 90, DEGREES, wait=True)
+    smart_drive.turn_for(LEFT, 90, DEGREES, wait=True)
+    smart_drive.turn_for(LEFT, 90, DEGREES, wait=True)
+    smart_drive.turn_for(LEFT, 90, DEGREES, wait=True)
+ 
+demo()
 # spin_robot_pid()
 # spin_robot_no_pid()
