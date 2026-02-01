@@ -348,6 +348,21 @@ def whenControllerR2Pressed():
     brain.screen.next_row()
 
 
+# registrate callbacks outside of user_control().
+# user_control() should be idempotent. Nick
+# reported that sometimes multiple calls to user_control() happens.
+# Install callbacks for buttons.  This is where you map the joystick
+# buttons to different functions that you defined above.
+controller_1.buttonL1.pressed(whenControllerL1Pressed)
+controller_1.buttonL2.pressed(whenControllerL2Pressed)
+controller_1.buttonR1.pressed(whenControllerR1Pressed)
+controller_1.buttonR2.pressed(whenControllerR2Pressed)
+controller_1.buttonUp.pressed(whenControllerUpPressed)
+controller_1.buttonX.pressed(whenControllerXPressed)
+controller_1.buttonB.pressed(whenControllerBPressed)
+controller_1.buttonA.pressed(whenControllerAPressed)
+controller_1.buttonY.pressed(whenControllerYPressed)
+
  
 # ------------------------------------------
 #
@@ -399,18 +414,6 @@ brain.screen.print("heyy")
 def user_control():
     brain.screen.print("HELP is so awesomesauce bro skibidi slay 677!")
     brain.screen.next_row()
-
-    # Install callbacks for buttons.  This is where you map the joystick
-    # buttons to different functions that you defined above.
-    controller_1.buttonL1.pressed(whenControllerL1Pressed)
-    controller_1.buttonL2.pressed(whenControllerL2Pressed)
-    controller_1.buttonR1.pressed(whenControllerR1Pressed)
-    controller_1.buttonR2.pressed(whenControllerR2Pressed)
-    controller_1.buttonUp.pressed(whenControllerUpPressed)
-    controller_1.buttonX.pressed(whenControllerXPressed)
-    controller_1.buttonB.pressed(whenControllerBPressed)
-    controller_1.buttonA.pressed(whenControllerAPressed)
-    controller_1.buttonY.pressed(whenControllerYPressed)
 
     SMOOTH_THRESHOLD = 20 # Only adjust speed if speed delta exceeds this value
     SMOOTH_STEP = 15 # 250ms/20ms*8 = 100. i.e. goes from 0 to 100 in 0.5 sec
